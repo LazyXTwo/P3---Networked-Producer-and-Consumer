@@ -1,0 +1,22 @@
+# Maven generated files
+target/
+
+# Java compiled files
+*.class
+*.jar
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Uploaded media
+uploads/
+
+# Temporary files
+*.tmp
+*.log

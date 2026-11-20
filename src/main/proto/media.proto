@@ -1,0 +1,16 @@
+syntax = "proto3";
+package media;
+option java_package = "media.grpc";
+option java_multiple_files = true;
+
+service UploadService {
+  rpc Upload(stream UploadRequest) returns (UploadReply);
+}
+message UploadRequest {
+  oneof body {
+    FileInfo info = 1;
+    bytes chunk = 2;
+  }
+}
+message FileInfo { string filename = 1; int64 size = 2; }
+message UploadReply { bool accepted = 1; string message = 2; }
