@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Model: bounded pending uploads; fixed worker pool persists files. */
 public final class MediaService implements AutoCloseable {
     private final BlockingQueue<Pending> queue;
-    private final Semaphore capacity;
     private final ExecutorService workers;
     private final Path destination;
     private final Consumer<MediaRecord> onSaved;
@@ -33,7 +32,6 @@ public final class MediaService implements AutoCloseable {
                         Consumer<MediaRecord> onSaved, Consumer<String> onEvent) throws IOException {
         if (consumers < 1 || maxQueue < 1) throw new IllegalArgumentException("c and q must be positive");
         this.queue = new ArrayBlockingQueue<>(maxQueue);
-        this.capacity = new Semaphore(maxQueue);
         this.destination = Files.createDirectories(destination.toAbsolutePath());
         this.onSaved = onSaved;
         this.onEvent = onEvent;
@@ -51,9 +49,9 @@ public final class MediaService implements AutoCloseable {
         for (int i = 0; i < consumers; i++) workers.execute(this::consume);
     }
 
-    /** Reserve pending capacity before accepting a byte of an upload. */
-    public boolean reserve() { return running && capacity.tryAcquire(); }
-    public void release() { capacity.release(); }
+    public int getQueueSize() { return queue.size(); }
+    public int getActiveCount() { return active.get(); }
+    public int getQueueCapacity() { return queue.remainingCapacity() + queue.size(); }
     public boolean isDuplicate(String sha256) {
         return sha256 != null && !sha256.isBlank() && knownHashes.contains(sha256);
     }
@@ -173,7 +171,7 @@ public final class MediaService implements AutoCloseable {
             } catch (IOException e) {
                 onEvent.accept("Save failed: " + e.getMessage());
                 try { Files.deleteIfExists(pending.temporary()); } catch (IOException ignored) {}
-            } finally { active.decrementAndGet(); capacity.release(); }
+            } finally { active.decrementAndGet(); }
         }
     }
 

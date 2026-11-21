@@ -17,7 +17,7 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
 
     @Override public StreamObserver<UploadRequest> upload(StreamObserver<UploadReply> response) {
         return new StreamObserver<>() {
-            private boolean reserved, done, receivedInfo;
+            private boolean done, receivedInfo;
             private Path temp;
             private OutputStream output;
             private String filename;
@@ -30,7 +30,6 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
                 try { if (output != null) output.close(); } catch (IOException ignored) {}
                 if (!success) {
                     if (temp != null) try { Files.deleteIfExists(temp); } catch (IOException ignored) {}
-                    if (reserved) media.release();
                 }
                 log.accept(message);
                 response.onNext(UploadReply.newBuilder().setAccepted(success).setMessage(message).build());
@@ -49,8 +48,6 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
                                 !filename.toLowerCase().matches(".*\\.(mp4|m4v|mov|mkv|webm)")) {
                             finish(false, "Invalid filename, extension, or file size"); return;
                         }
-                        if (!media.reserve()) { finish(false, "DROPPED: queue full"); return; }
-                        reserved = true;
                         temp = Files.createTempFile("media-incoming-", ".part");
                         output = Files.newOutputStream(temp);
                         receivedInfo = true;
@@ -67,7 +64,6 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
                 done = true;
                 try { if (output != null) output.close(); } catch (IOException ignored) {}
                 if (temp != null) try { Files.deleteIfExists(temp); } catch (IOException ignored) {}
-                if (reserved) media.release();
                 log.accept("Client disconnected: " + t.getMessage());
             }
 
@@ -84,7 +80,7 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
                     finish(false, "DUPLICATE: file already exists (" + filename + ")");
                 else if (result == MediaService.SubmitResult.QUEUE_FULL)
                     finish(false, "DROPPED: queue full");
-                else { reserved = false; temp = null; finish(true, "Accepted " + filename + " (" + bytes + " bytes)"); }
+                else { temp = null; finish(true, "Accepted " + filename + " (" + bytes + " bytes)"); }
             }
         };
     }
