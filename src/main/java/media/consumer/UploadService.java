@@ -22,6 +22,7 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
             private OutputStream output;
             private String filename;
             private long expected, bytes;
+            private String sha256;
 
             private void finish(boolean success, String message) {
                 if (done) return;
@@ -43,6 +44,7 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
                         if (!request.hasInfo()) { finish(false, "Missing initial file metadata"); return; }
                         var info = request.getInfo();
                         filename = info.getFilename(); expected = info.getSize();
+                        sha256 = info.getSha256();
                         if (filename.isBlank() || expected <= 0 || expected > UploadConfig.MAX_FILE_BYTES ||
                                 !filename.toLowerCase().matches(".*\\.(mp4|m4v|mov|mkv|webm)")) {
                             finish(false, "Invalid filename, extension, or file size"); return;
@@ -74,7 +76,14 @@ public final class UploadService extends UploadServiceGrpc.UploadServiceImplBase
                 if (!receivedInfo || bytes != expected) { finish(false, "Upload incomplete: " + bytes + "/" + expected); return; }
                 try { output.close(); output = null; }
                 catch (IOException e) { finish(false, "Close failed: " + e.getMessage()); return; }
-                if (!media.submit(temp, filename, bytes)) finish(false, "DROPPED: queue unavailable");
+                String uploadedHash = sha256;
+                try { uploadedHash = MediaService.sha256(temp); }
+                catch (IOException e) { finish(false, "Hash calculation failed: " + e.getMessage()); return; }
+                MediaService.SubmitResult result = media.submit(temp, filename, bytes, uploadedHash);
+                if (result == MediaService.SubmitResult.DUPLICATE)
+                    finish(false, "DUPLICATE: file already exists (" + filename + ")");
+                else if (result == MediaService.SubmitResult.QUEUE_FULL)
+                    finish(false, "DROPPED: queue full");
                 else { reserved = false; temp = null; finish(true, "Accepted " + filename + " (" + bytes + " bytes)"); }
             }
         };

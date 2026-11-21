@@ -12,5 +12,5 @@ message UploadRequest {
     bytes chunk = 2;
   }
 }
-message FileInfo { string filename = 1; int64 size = 2; }
+message FileInfo { string filename = 1; int64 size = 2; string sha256 = 3; }
 message UploadReply { bool accepted = 1; string message = 2; }
